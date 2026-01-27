@@ -1,0 +1,344 @@
+1. Initial Screen (Login Page)
+
+When the page loads, the user sees a clean login selection screen titled “Construction ERP”.
+
+There are four login buttons:
+
+Login as Admin
+
+Login as Engineer
+
+Login as Client
+
+Login as Vendor
+
+👉 No username/password typing is required.
+Clicking a button logs the user in instantly with a predefined role.
+
+2. Role-Based Dashboard (Main Screen)
+
+After login, the system displays a dashboard with cards (tiles).
+
+Dashboard behavior:
+
+A welcome message shows the logged-in user’s role name.
+
+A grid of cards appears.
+
+The cards shown depend on the user role.
+
+Cards shown by role:
+
+Admin / Engineer
+
+Attendance
+
+Material
+
+Client
+
+Vendor
+
+Sub Contractor
+
+Photo
+
+Look Ahead
+
+App Integration
+
+Management
+
+Vendor
+
+Material
+
+Vendor
+
+Client
+
+Plan
+
+Agreement
+
+Payment
+
+Appointment
+
+Each card is clickable and opens its related module.
+
+A Logout button reloads the page and returns to the login screen.
+
+3. Attendance Module
+
+When Attendance is clicked, a submenu opens with options:
+
+Add User
+
+Manual Entry
+
+Face Scan
+
+Fingerprint (simulated)
+
+View Attendance
+
+Employees list
+
+Add User
+
+Form to add a new employee:
+
+ID, Name, Age, Address, Role, Salary
+
+Face Scan:
+
+Opens the device camera
+
+Captures and stores a face image (browser-based)
+
+Fingerprint scan is simulated
+
+Saves employee data in memory
+
+Manual Attendance
+
+Search employee by name
+
+Auto-suggestion dropdown
+
+Mark employee as Present
+
+Attendance Sheet (Most Powerful Feature)
+
+Shows a professional attendance & salary report.
+
+View modes:
+
+Monthly View
+
+Shows all days of the month
+
+P = Present, A = Absent
+
+Sundays auto-marked as Absent
+
+Calculates:
+
+Total present days
+
+Salary per day
+
+Total salary
+
+Daily View
+
+Shows present / absent count for a selected date
+
+Extra features:
+
+Filter by role (Mason, Labor, Engineer, Supervisor)
+
+Search by name
+
+Editable mode (Admin / Engineer only)
+
+Click cells to toggle Present ↔ Absent
+
+Graphs:
+
+Monthly → Bar chart (days present)
+
+Daily → Doughnut chart (present vs absent)
+
+4. Employee List
+
+Displays:
+
+Employee name
+
+Type
+
+Age
+
+Salary per day
+
+Includes:
+
+Role filter
+
+Name search
+
+5. Client Module
+
+Shows all client projects as cards.
+
+Admin / Engineer:
+
+Can add new clients
+
+Can upload files and edit payments
+
+Client selection opens:
+
+Plan & Designs
+
+Agreements
+
+Payments
+
+Appointments
+
+Plans & Designs
+
+Upload drawings, images, PDFs
+
+View uploaded files in a modal
+
+Delete files (Admin / Engineer only)
+
+Agreements
+
+Upload signed agreements
+
+View or delete files
+
+Clients can only view, not edit
+
+Payments (Advanced Feature)
+
+Shows:
+
+Project total amount
+
+Payment stages (Foundation, Plinth, Roof, etc.)
+
+Stage-wise payment amount
+
+Paid / Pending status
+
+Progress bar
+
+Transaction history
+
+Admin / Engineer can:
+
+Edit stages
+
+Change amounts
+
+Mark stages as paid
+
+Add new transactions
+
+Clients can:
+
+Only view payment status
+
+Appointments
+
+Client selects:
+
+Date
+
+Time
+
+Reason
+
+Sends appointment request to admin (simulated)
+
+6. Material Management Module
+
+Displays a full inventory and costing table.
+
+Includes:
+
+Date / month filter
+
+Client filter
+
+Supplier filter
+
+Material filter
+
+Shows:
+
+Order date
+
+Client/site
+
+Material name
+
+Unit price
+
+Supplier
+
+Ordered quantity
+
+Total cost
+
+Payment status
+
+Available stock
+
+Low stock warning
+
+Admin / Engineer:
+
+Can update stock quantity
+
+Can place new orders
+
+Vendor:
+
+Can view materials
+
+New Material Order
+
+Select client
+
+Select material
+
+Select supplier
+
+Quantity auto-calculates price
+
+Shows total amount
+
+Payment options:
+
+Pay Now (UPI / Card / Bank – simulated)
+
+Pay Later
+
+Orders update inventory automatically.
+
+7. Generic Pages
+
+For modules still under development (Photo, Vendor, Management, etc.):
+
+A placeholder page appears
+
+Shows module name
+
+Back button to dashboard
+
+8. Overall System Nature
+
+Entire system runs in-browser
+
+Uses mock data
+
+No backend or database
+
+Highly realistic ERP-style UI
+
+Fully role-based access
+
+Suitable for:
+
+Civil engineering ERP demo
+
+College final-year project
+
+Startup MVP presentation

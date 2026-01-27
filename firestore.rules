@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Photos collection - any authenticated user can read/write
+    match /photos/{photoId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Test collection for debugging
+    match /test/{testId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Users collection - users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Clients collection - any authenticated user can read/write
+    match /clients/{clientId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Vendors collection - any authenticated user can read/write
+    match /vendors/{vendorId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Employees collection - any authenticated user can read/write
+    match /employees/{employeeId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Materials collection - any authenticated user can read/write
+    match /materials/{materialId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Material Orders collection - any authenticated user can read/write
+    match /materialOrders/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
