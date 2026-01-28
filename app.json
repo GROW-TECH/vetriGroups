@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Construction ERP",
-    "slug": "construction-erp",
+    "slug": "vettrigroups",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -62,10 +62,10 @@
     "experiments": {
       "reactCompiler": true
     },
-    "owner": "vettri_groups",
+    "owner": "growtech",
     "extra": {
       "eas": {
-        "projectId": "c0d952ba-e2c7-4678-b126-28322698d176"
+        "projectId": "72ff9294-ef74-4c29-8ad5-2d35d920b361"
       }
     }
   }

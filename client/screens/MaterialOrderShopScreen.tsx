@@ -420,27 +420,8 @@ const saveCartItemToFirestore = async (item: CartItem) => {
 // 1. UPDATE THE handlePlaceOrder FUNCTION
 // Replace the existing handlePlaceOrder function with this:
 
-// ============================================
-// COMPLETE REPLACEMENT - handlePlaceOrder
-// ============================================
-
-// ============================================
-// COMPLETE REPLACEMENT - handlePlaceOrder
-// ============================================
-
-// ============================================
-// COMPLETE REPLACEMENT - handlePlaceOrder
-// ============================================
-
-// ============================================
-// COMPLETE REPLACEMENT - handlePlaceOrder
-// ============================================
-
 const handlePlaceOrder = async () => {
-  console.log("🔍 Checking addMaterialOrder function:", typeof addMaterialOrder);
   const qty = parseInt(quantity, 10);
-  
-  // Validation
   if (
     !selectedItem ||
     !selectedClientId ||
@@ -456,12 +437,11 @@ const handlePlaceOrder = async () => {
     return;
   }
 
-  if (!user || (!user.id && !user.username)) {
+  if (!user || !user.id) {
     Alert.alert("Error", "User not authenticated. Please login again.");
     return;
   }
 
-  const userId = user.id || user.username; // Use id if available, otherwise username
   const status = checkoutPaymentStatus;
   const orderDate = new Date().toISOString().split("T")[0];
   const vendor = (vendors || []).find((v) => v.id === selectedVendorId);
@@ -470,14 +450,15 @@ const handlePlaceOrder = async () => {
 
   try {
     const orderId = `mo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const timestamp = new Date();
     
-    console.log("🔥 Starting order save:", orderId);
+    // Save order directly to Firestore
+    const orderRef = doc(db, "material_orders", orderId);
+    
+    console.log("🔥 Saving order to Firestore:", orderId);
 
-    // Prepare common order data
-    const orderData = {
+    await setDoc(orderRef, {
       id: orderId,
-      userId: userId,
+      userId: user.id,
       userName: user.name || 'Unknown',
       userRole: user.role || 'unknown',
       date: orderDate,
@@ -496,52 +477,24 @@ const handlePlaceOrder = async () => {
       orderStatus: 'placed',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
-
-    // Save to materialOrders collection
-    console.log("📝 Saving to materialOrders...");
-    const materialOrderRef = doc(db, "materialOrders", orderId);
-    await setDoc(materialOrderRef, orderData);
-    console.log("✅ Saved to materialOrders");
-
-    // Save to orders collection with different structure
-    console.log("📝 Saving to orders...");
-    const orderRef = doc(db, "orders", orderId);
-    await setDoc(orderRef, {
-      orderId,
-      message: `Order: ${selectedItem.name} - ${qty} ${selectedItem.unit} | Vendor: ${vendor?.name || 'Unknown'} | Total: ₹${totalCost.toLocaleString("en-IN")}`,
-      test: false,
-      timestamp: serverTimestamp(),
-      // Include all order details
-      ...orderData,
     });
-    console.log("✅ Saved to orders");
+// 🔍 VERIFY FIRESTORE WRITE
+const snap = await getDoc(orderRef);
 
-    // Verify both writes
-    console.log("🔍 Verifying writes...");
-    const materialOrderSnap = await getDoc(materialOrderRef);
-    const orderSnap = await getDoc(orderRef);
+if (!snap.exists()) {
+  console.error("❌ Firestore write FAILED for", orderId);
+  Alert.alert("Error", "Order was NOT saved in Firestore");
+  return;
+}
 
-    if (!materialOrderSnap.exists()) {
-      console.error("❌ materialOrders verification FAILED");
-      throw new Error("Order not saved to materialOrders collection");
-    }
+console.log("✅ Firestore document saved:", snap.data());
 
-    if (!orderSnap.exists()) {
-      console.error("❌ orders verification FAILED");
-      throw new Error("Order not saved to orders collection");
-    }
+    console.log("✅ Order saved successfully:", orderId);
 
-    console.log("✅ Both documents verified successfully");
-    console.log("materialOrders data:", materialOrderSnap.data());
-    console.log("orders data:", orderSnap.data());
-
-    // Create in-app notifications
+    // Create in-app notification for vendor (only if addNotification is defined)
     if (typeof addNotification === 'function') {
-      console.log("📢 Creating notifications...");
-      
       await addNotification({
-        id: `notif_vendor_${Date.now()}`,
+        id: `notif_${Date.now()}`,
         type: "order",
         title: "🔔 New Material Order",
         message: `Order received: ${selectedItem.name} - ${qty} ${selectedItem.unit} | Total: ₹${totalCost.toLocaleString("en-IN")} | Project: ${client?.projectName || "N/A"}`,
@@ -560,8 +513,9 @@ const handlePlaceOrder = async () => {
         },
       });
 
+      // Create in-app notification for admin/engineer
       await addNotification({
-        id: `notif_admin_${Date.now() + 1}`,
+        id: `notif_admin_${Date.now()}`,
         type: "order",
         title: "✅ Order Placed Successfully",
         message: `${selectedItem.name} - ${qty} ${selectedItem.unit} ordered from ${vendor?.name || "Vendor"} | Total: ₹${totalCost.toLocaleString("en-IN")} | Project: ${client?.projectName || "N/A"}`,
@@ -578,12 +532,9 @@ const handlePlaceOrder = async () => {
           vendorName: vendor?.name,
         },
       });
-
-      console.log("✅ Notifications created");
     }
 
     // Send WhatsApp/SMS notification to vendor
-    console.log("📱 Sending vendor notification...");
     await sendVendorNotification({
       vendorId: selectedVendorId,
       materialName: selectedItem.name,
@@ -598,53 +549,38 @@ const handlePlaceOrder = async () => {
     setShowCheckout(false);
     resetCheckout();
     
-    console.log("🎉 Order placement complete!");
-    
     Alert.alert(
-      "✅ Order Placed Successfully",
-      `Order ID: ${orderId.slice(-8)}\n\nMaterial: ${selectedItem.name}\nQuantity: ${qty} ${selectedItem.unit}\nTotal: ₹${totalCost.toLocaleString("en-IN")}\n\nStatus: ${status.toUpperCase()}\n\nSaved to both materialOrders and orders collections.\nVendor has been notified.`,
+      "✅ Order Placed",
+      `Order #${orderId.slice(-8)} has been placed successfully!\n\nStatus: ${status.toUpperCase()}\nVendor has been notified.`,
     );
-
   } catch (error: any) {
-    console.error("❌ ERROR placing order:", error);
-    console.error("Error name:", error?.name);
+    console.error("❌ Error placing order:", error);
     console.error("Error code:", error?.code);
     console.error("Error message:", error?.message);
-    console.error("Full error:", JSON.stringify(error, null, 2));
     
     Alert.alert(
-      "❌ Order Failed", 
-      `Failed to place order.\n\nError: ${error?.message || error?.code || 'Unknown error'}\n\nPlease check:\n1. Internet connection\n2. Firebase configuration\n3. Console logs for details`
+      "Error", 
+      `Failed to place order: ${error?.message || 'Unknown error'}. Please check Firebase permissions.`
     );
   }
 };
 
 // ============================================
-// COMPLETE REPLACEMENT - placeVendorGroupOrders
-// ============================================
+// 2. UPDATE THE placeVendorGroupOrders FUNCTION
+// Replace the existing placeVendorGroupOrders function with this:
 
 const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
   console.log("=== Starting placeVendorGroupOrders ===");
-  console.log("Vendor:", vendorGroup.vendorName);
-  console.log("Vendor ID:", vendorGroup.vendorId);
-  console.log("Items count:", vendorGroup.items.length);
-  console.log("Full vendor group:", JSON.stringify(vendorGroup, null, 2));
   
   if (!selectedClientId) {
-    console.log("❌ No client selected!");
     Alert.alert("Missing Site", "Please select a site/client.");
     return;
   }
-  console.log("✅ Client ID:", selectedClientId);
 
-  if (!user || (!user.id && !user.username)) {
-    console.log("❌ No user authenticated!");
+  if (!user || !user.id) {
     Alert.alert("Error", "User not authenticated. Please login again.");
     return;
   }
-  
-  const userId = user.id || user.username; // Use id if available, otherwise username
-  console.log("✅ User ID:", userId);
 
   const status = cartPaymentStatus;
   const orderDate = new Date().toISOString().split("T")[0];
@@ -659,22 +595,21 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
       totalCost: number;
     }[] = [];
 
-    console.log(`Processing ${vendorGroup.items.length} items...`);
+    console.log("Processing", vendorGroup.items.length, "items");
 
     // Process all items in the vendor group
-    for (let i = 0; i < vendorGroup.items.length; i++) {
-      const item = vendorGroup.items[i];
+    for (const item of vendorGroup.items) {
       const materialId = getMaterialIdForCategory(item.catalogItem.category);
       const orderId = `mo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      console.log(`\n📦 Processing item ${i + 1}/${vendorGroup.items.length}`);
-      console.log("Order ID:", orderId);
-      console.log("Material:", item.catalogItem.name);
+      console.log("🔥 Creating order:", orderId);
 
-      // Prepare order data
-      const orderData = {
+      // Save order directly to Firestore
+      const orderRef = doc(db, "material_orders", orderId);
+
+      await setDoc(orderRef, {
         id: orderId,
-        userId: userId,
+        userId: user.id,
         userName: user.name || 'Unknown',
         userRole: user.role || 'unknown',
         date: orderDate,
@@ -693,25 +628,9 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
         orderStatus: 'placed',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
-
-      // Save to materialOrders
-      console.log("📝 Saving to materialOrders...");
-      const materialOrderRef = doc(db, "materialOrders", orderId);
-      await setDoc(materialOrderRef, orderData);
-      console.log("✅ Saved to materialOrders");
-
-      // Save to orders
-      console.log("📝 Saving to orders...");
-      const orderRef = doc(db, "orders", orderId);
-      await setDoc(orderRef, {
-        orderId,
-        message: `Order: ${item.catalogItem.name} - ${item.quantity} ${item.unit} | Vendor: ${vendorGroup.vendorName} | Total: ₹${item.totalCost.toLocaleString("en-IN")}`,
-        test: false,
-        timestamp: serverTimestamp(),
-        ...orderData,
       });
-      console.log("✅ Saved to orders");
+
+      console.log("✅ Order saved:", orderId);
 
       orderItems.push({
         orderId,
@@ -721,23 +640,20 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
         totalCost: item.totalCost,
       });
 
-      // Delay between items to prevent conflicts
-      if (i < vendorGroup.items.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      // Small delay to avoid timestamp conflicts
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
 
-    console.log("\n✅ All orders saved successfully!");
-    console.log("Creating notifications...");
+    console.log("All orders saved. Creating notifications...");
 
-    // Create notifications
+    // Create notifications (only if addNotification is defined)
     if (typeof addNotification === 'function') {
       const combinedMaterialNames = orderItems
         .map((i) => `${i.materialName} (${i.quantity} ${i.unit})`)
         .join(", ");
       
       await addNotification({
-        id: `notif_vendor_${Date.now()}`,
+        id: `notif_${Date.now()}`,
         type: "order",
         title: "🔔 New Material Order",
         message: `Order received: ${combinedMaterialNames} | Total: ₹${vendorGroup.subtotal.toLocaleString("en-IN")} | Project: ${client?.projectName || "N/A"}`,
@@ -756,7 +672,7 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
       });
 
       await addNotification({
-        id: `notif_admin_${Date.now() + 1}`,
+        id: `notif_admin_${Date.now()}`,
         type: "order",
         title: "✅ Orders Placed Successfully",
         message: `${vendorGroup.items.length} item(s) ordered from ${vendorGroup.vendorName} | Total: ₹${vendorGroup.subtotal.toLocaleString("en-IN")} | Project: ${client?.projectName || "N/A"}`,
@@ -772,12 +688,9 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
           itemCount: vendorGroup.items.length,
         },
       });
-
-      console.log("✅ Notifications created");
     }
 
     // Send WhatsApp notification to vendor
-    console.log("📱 Sending vendor notification...");
     await sendVendorNotification({
       vendorId: vendorGroup.vendorId,
       materialName: orderItems.map((i) => `${i.materialName} (${i.quantity} ${i.unit})`).join(", "),
@@ -793,26 +706,25 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
     clearCart();
     resetCartStatus();
     
-    console.log("🎉 Cart order placement complete!");
-    
     Alert.alert(
-      "✅ Orders Placed Successfully",
-      `${vendorGroup.items.length} order(s) placed!\n\nVendor: ${vendorGroup.vendorName}\nTotal: ₹${vendorGroup.subtotal.toLocaleString("en-IN")}\n\nStatus: ${status.toUpperCase()}\n\nSaved to both materialOrders and orders collections.\nVendor has been notified.`,
+      "✅ Orders Placed",
+      `${vendorGroup.items.length} order(s) placed successfully!\n\nStatus: ${status.toUpperCase()}\nTotal: ₹${vendorGroup.subtotal.toLocaleString("en-IN")}\n\nVendor has been notified.`,
     );
     
+    console.log("=== Order placement complete ===");
   } catch (error: any) {
-    console.error("❌ ERROR placing cart orders:", error);
-    console.error("Error name:", error?.name);
+    console.error("❌ Error placing orders:", error);
     console.error("Error code:", error?.code);
     console.error("Error message:", error?.message);
-    console.error("Full error:", JSON.stringify(error, null, 2));
     
     Alert.alert(
-      "❌ Orders Failed", 
-      `Failed to place orders.\n\nError: ${error?.message || error?.code || 'Unknown error'}\n\nPlease check:\n1. Internet connection\n2. Firebase configuration\n3. Console logs for details`
+      "Error", 
+      `Failed to place orders: ${error?.message || 'Unknown error'}. Please check Firebase permissions.`
     );
   }
 };
+
+
 
 
 
@@ -1167,8 +1079,36 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
         </ScrollView>
       </View>
 
-
-
+     <FlatList
+  data={filteredCatalog}
+  key={getColumns()}                 // forces re-render on resize
+  keyExtractor={(item) => item.key}
+  renderItem={renderProduct}
+  numColumns={getColumns()}          // responsive columns
+  columnWrapperStyle={{ gap: Spacing.md }}
+  contentContainerStyle={[
+    styles.listContent,
+    { paddingBottom: insets.bottom + Spacing.xl },
+  ]}
+  showsVerticalScrollIndicator={false}
+  ListEmptyComponent={() => (
+    <View style={styles.emptyState}>
+      <Feather name="package" size={44} color={theme.textSecondary} />
+      <ThemedText
+        type="body"
+        style={{ color: theme.textSecondary, marginTop: Spacing.md }}
+      >
+        No materials found
+      </ThemedText>
+      <ThemedText
+        type="small"
+        style={{ color: theme.textSecondary, marginTop: Spacing.xs }}
+      >
+        Try a different search or category.
+      </ThemedText>
+    </View>
+  )}
+/>
 
 <Modal
   visible={showCheckout}
@@ -1177,17 +1117,9 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
 >
 
         <ThemedView style={styles.modalContainer}>
-         <View
-  style={[
-    styles.modalHeader,
-    {
-      borderBottomColor: theme.border,
-      paddingTop: insets.top + 12,
-      paddingBottom: 12,
-    },
-  ]}
->
-
+          <View
+            style={[styles.modalHeader, { borderBottomColor: theme.border }]}
+          >
             <Pressable onPress={() => setShowCheckout(false)} hitSlop={10}>
               <ThemedText
                 type="body"
@@ -1202,17 +1134,12 @@ const placeVendorGroupOrders = async (vendorGroup: VendorCartGroup) => {
             <View style={{ width: 60 }} />
           </View>
 
-         <KeyboardAwareScrollViewCompat
-  contentContainerStyle={[
-    styles.modalContent,
-    {
-      paddingBottom: insets.bottom + Spacing.xl,
-      flexGrow: 1,                 // 🔥 IMPORTANT
-      justifyContent: "center",    // 🔥 IMPORTANT
-    },
-  ]}
->
-
+          <KeyboardAwareScrollViewCompat
+            contentContainerStyle={[
+              styles.modalContent,
+              { paddingBottom: insets.bottom + Spacing.xl },
+            ]}
+          >
             {selectedItem ? (
               <View
                 style={[
@@ -1594,379 +1521,350 @@ setTimeout(() => {
       </Modal>
 
      
-     {/* Cart Modal */}
-     {/* Cart Modal */}
-<Modal
-  visible={showCart}
-  animationType="slide"
-  presentationStyle="pageSheet"
-  onRequestClose={() => setShowCart(false)}
->
-  <ThemedView style={[styles.modalContainer, { marginTop: 20, flex: 1 }]}>
-    <View
-      style={[
-        styles.modalHeader, 
-        { 
-          borderBottomColor: theme.border,
-          paddingTop: insets.top + Spacing.md,
-        }
-      ]}
-    >
-      {/* Close Button with Icon */}
-      <Pressable 
-        onPress={() => setShowCart(false)} 
-        hitSlop={10}
-        style={styles.iconButton}
+      {/* Cart Modal */}
+      <Modal
+        visible={showCart}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCart(false)}
       >
-        <Feather name="x" size={20} color={Colors.light.primary} />
-        <ThemedText
-          type="body"
-          style={{ 
-            color: Colors.light.primary, 
-            fontWeight: "600",
-            marginLeft: 4
-          }}
-        >
-          
-        </ThemedText>
-      </Pressable>
-      
-      <ThemedText type="body" style={{ fontWeight: "700" }}>
-        Shopping Cart ({getCartItemCount()})
-      </ThemedText>
-      
-      {/* Clear Button with Icon */}
-      <Pressable 
-        onPress={clearCart} 
-        hitSlop={10}
-        style={styles.iconButton}
-      >
-        <Feather name="trash-2" size={18} color="#DC2626" />
-        <ThemedText
-          type="body"
-          style={{ 
-            color: "#DC2626", 
-            fontWeight: "600",
-            marginLeft: 4
-          }}
-        >
-        </ThemedText>
-      </Pressable>
-    </View>
-
-    <KeyboardAwareScrollViewCompat
-      contentContainerStyle={[
-        styles.modalContent,
-        {
-          paddingBottom: insets.bottom + Spacing.xl,
-          flexGrow: 1,
-          justifyContent: "center",
-        },
-      ]}
-    >
-      {cart.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Feather
-            name="shopping-cart"
-            size={44}
-            color={theme.textSecondary}
-          />
-          <ThemedText
-            type="body"
-            style={{ color: theme.textSecondary, marginTop: Spacing.md }}
+        <ThemedView style={styles.modalContainer}>
+          <View
+            style={[styles.modalHeader, { 
+    borderBottomColor: theme.border,
+    marginTop: 35  // Add this line
+  }]}
           >
-            Your cart is empty
-          </ThemedText>
-        </View>
-      ) : (
-        <>
-          {/* Site Selection */}
-          <View style={styles.section}>
-            <ThemedText type="small" style={styles.sectionLabel}>
-              Select Site / Client
+            <Pressable onPress={() => setShowCart(false)} hitSlop={10}>
+              <ThemedText
+                type="body"
+                style={{ color: Colors.light.primary, fontWeight: "600" }}
+              >
+                Close
+              </ThemedText>
+            </Pressable>
+            <ThemedText type="body" style={{ fontWeight: "700" }}>
+              Shopping Cart ({getCartItemCount()})
             </ThemedText>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.chipRow}>
-                {clients.map((c) => (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => setSelectedClientId(c.id)}
-                    style={[
-                      styles.selectChip,
-                      {
-                        borderColor:
-                          selectedClientId === c.id
-                            ? Colors.light.primary
-                            : theme.border,
-                        backgroundColor:
-                          selectedClientId === c.id
-                            ? Colors.light.primary + "10"
-                            : theme.backgroundDefault,
-                      },
-                    ]}
-                  >
-                    <ThemedText
-                      type="small"
-                      style={{
-                        color:
-                          selectedClientId === c.id
-                            ? Colors.light.primary
-                            : theme.text,
-                        fontWeight:
-                          selectedClientId === c.id ? "700" : "500",
-                      }}
-                    >
-                      {c.projectName}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
+            <Pressable onPress={clearCart} hitSlop={10}>
+              <ThemedText
+                type="body"
+                style={{ color: "#DC2626", fontWeight: "600" }}
+              >
+                Clear
+              </ThemedText>
+            </Pressable>
           </View>
 
-          {/* Vendor Groups */}
-          {getVendorGroups().map((vendorGroup) => (
-            <View
-              key={vendorGroup.vendorId}
-              style={[
-                styles.vendorGroupCard,
-                {
-                  backgroundColor: theme.backgroundDefault,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <View style={styles.vendorGroupHeader}>
-                <ThemedText type="body" style={{ fontWeight: "800" }}>
-                  {vendorGroup.vendorName}
-                </ThemedText>
-                <ThemedText
-                  type="body"
-                  style={{
-                    color: Colors.light.primary,
-                    fontWeight: "800",
-                  }}
-                >
-                  ₹{vendorGroup.subtotal.toLocaleString()}
-                </ThemedText>
-              </View>
-
-              {vendorGroup.items.map((item: any) => (
-                <View key={item.id} style={styles.cartItem}>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText
-                      type="body"
-                      style={{ fontWeight: "600" }}
-                      numberOfLines={1}
-                    >
-                      {item.catalogItem.name}
-                    </ThemedText>
-                    <ThemedText
-                      type="small"
-                      style={{ color: theme.textSecondary }}
-                    >
-                      ₹{item.unitPrice}/{item.unit}
-                    </ThemedText>
-                  </View>
-
-                  <View style={styles.quantityControls}>
-                    <Pressable
-                      onPress={() =>
-                        updateCartQuantity(item.id, item.quantity - 1)
-                      }
-                      style={[
-                        styles.quantityBtn,
-                        { borderColor: theme.border },
-                      ]}
-                    >
-                      <Feather
-                        name="minus"
-                        size={14}
-                        color={theme.text}
-                      />
-                    </Pressable>
-                    <ThemedText
-                      type="body"
-                      style={{
-                        fontWeight: "600",
-                        minWidth: 30,
-                        textAlign: "center",
-                      }}
-                    >
-                      {item.quantity}
-                    </ThemedText>
-                    <Pressable
-                      onPress={() =>
-                        updateCartQuantity(item.id, item.quantity + 1)
-                      }
-                      style={[
-                        styles.quantityBtn,
-                        { borderColor: theme.border },
-                      ]}
-                    >
-                      <Feather name="plus" size={14} color={theme.text} />
-                    </Pressable>
-                  </View>
-
-                  <ThemedText
-                    type="body"
-                    style={{
-                      fontWeight: "700",
-                      minWidth: 60,
-                      textAlign: "right",
-                    }}
-                  >
-                    ₹{item.totalCost.toLocaleString()}
-                  </ThemedText>
-
-                  <Pressable
-                    onPress={() => removeFromCart(item.id)}
-                    style={{ marginLeft: Spacing.sm }}
-                  >
-                    <Feather name="trash-2" size={16} color="#DC2626" />
-                  </Pressable>
-                </View>
-              ))}
-
-              <View style={{ marginTop: Spacing.sm }}>
-                <ThemedText type="small" style={styles.sectionLabel}>
-                  Payment Status
-                </ThemedText>
-                <View style={styles.paymentRow}>
-                  <Pressable
-                    onPress={() => setCartPaymentStatus("pending")}
-                    style={[
-                      styles.paymentChoice,
-                      {
-                        borderColor:
-                          cartPaymentStatus === "pending"
-                            ? Colors.light.warning
-                            : theme.border,
-                        backgroundColor:
-                          cartPaymentStatus === "pending"
-                            ? Colors.light.warning + "12"
-                            : theme.backgroundDefault,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name="clock"
-                      size={16}
-                      color={
-                        cartPaymentStatus === "pending"
-                          ? Colors.light.warning
-                          : theme.textSecondary
-                      }
-                    />
-                    <ThemedText
-                      type="small"
-                      style={{
-                        marginLeft: 8,
-                        color:
-                          cartPaymentStatus === "pending"
-                            ? Colors.light.warning
-                            : theme.text,
-                        fontWeight:
-                          cartPaymentStatus === "pending" ? "700" : "500",
-                      }}
-                    >
-                      Pending
-                    </ThemedText>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => setCartPaymentStatus("paid")}
-                    style={[
-                      styles.paymentChoice,
-                      {
-                        borderColor:
-                          cartPaymentStatus === "paid"
-                            ? Colors.light.success
-                            : theme.border,
-                        backgroundColor:
-                          cartPaymentStatus === "paid"
-                            ? Colors.light.success + "12"
-                            : theme.backgroundDefault,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name="check-circle"
-                      size={16}
-                      color={
-                        cartPaymentStatus === "paid"
-                          ? Colors.light.success
-                          : theme.textSecondary
-                      }
-                    />
-                    <ThemedText
-                      type="small"
-                      style={{
-                        marginLeft: 8,
-                        color:
-                          cartPaymentStatus === "paid"
-                            ? Colors.light.success
-                            : theme.text,
-                        fontWeight:
-                          cartPaymentStatus === "paid" ? "700" : "500",
-                      }}
-                    >
-                      Paid
-                    </ThemedText>
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.vendorActions}>
-                <Pressable
-                  onPress={() => {
-                    console.log("Place Order button pressed");
-                    handleVendorPayLater(vendorGroup);
-                  }}
-                  style={[
-                    styles.payLaterBtn,
-                    { borderColor: theme.border },
-                  ]}
-                >
-                  <ThemedText
-                    type="small"
-                    style={{
-                      color: theme.textSecondary,
-                      fontWeight: "600",
-                    }}
-                  >
-                    Place Order
-                  </ThemedText>
-                </Pressable>
-              </View>
-            </View>
-          ))}
-
-          {/* Cart Total */}
-          <View
-            style={[
-              styles.cartTotalCard,
-              {
-                backgroundColor: theme.backgroundSecondary,
-                borderColor: theme.border,
-              },
+          <KeyboardAwareScrollViewCompat
+            contentContainerStyle={[
+              styles.modalContent,
+              { paddingBottom: insets.bottom + Spacing.xl },
             ]}
           >
-            <ThemedText type="body" style={{ fontWeight: "800" }}>
-              Total Amount
-            </ThemedText>
-            <ThemedText
-              type="h3"
-              style={{ fontWeight: "900", color: Colors.light.primary }}
-            >
-              ₹{getCartTotal().toLocaleString()}
-            </ThemedText>
-          </View>
-        </>
-      )}
-    </KeyboardAwareScrollViewCompat>
-  </ThemedView>
-</Modal>
+            {cart.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Feather
+                  name="shopping-cart"
+                  size={44}
+                  color={theme.textSecondary}
+                />
+                <ThemedText
+                  type="body"
+                  style={{ color: theme.textSecondary, marginTop: Spacing.md }}
+                >
+                  Your cart is empty
+                </ThemedText>
+              </View>
+            ) : (
+              <>
+                {/* Site Selection */}
+                <View style={styles.section}>
+                  <ThemedText type="small" style={styles.sectionLabel}>
+                    Select Site / Client
+                  </ThemedText>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.chipRow}>
+                      {clients.map((c) => (
+                        <Pressable
+                          key={c.id}
+                          onPress={() => setSelectedClientId(c.id)}
+                          style={[
+                            styles.selectChip,
+                            {
+                              borderColor:
+                                selectedClientId === c.id
+                                  ? Colors.light.primary
+                                  : theme.border,
+                              backgroundColor:
+                                selectedClientId === c.id
+                                  ? Colors.light.primary + "10"
+                                  : theme.backgroundDefault,
+                            },
+                          ]}
+                        >
+                          <ThemedText
+                            type="small"
+                            style={{
+                              color:
+                                selectedClientId === c.id
+                                  ? Colors.light.primary
+                                  : theme.text,
+                              fontWeight:
+                                selectedClientId === c.id ? "700" : "500",
+                            }}
+                          >
+                            {c.projectName}
+                          </ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+
+                {/* Vendor Groups */}
+                {getVendorGroups().map((vendorGroup) => (
+                  <View
+                    key={vendorGroup.vendorId}
+                    style={[
+                      styles.vendorGroupCard,
+                      {
+                        backgroundColor: theme.backgroundDefault,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.vendorGroupHeader}>
+                      <ThemedText type="body" style={{ fontWeight: "800" }}>
+                        {vendorGroup.vendorName}
+                      </ThemedText>
+                      <ThemedText
+                        type="body"
+                        style={{
+                          color: Colors.light.primary,
+                          fontWeight: "800",
+                        }}
+                      >
+                        ₹{vendorGroup.subtotal.toLocaleString()}
+                      </ThemedText>
+                    </View>
+
+                    {vendorGroup.items.map((item: any) => (
+                      <View key={item.id} style={styles.cartItem}>
+                        <View style={{ flex: 1 }}>
+                          <ThemedText
+                            type="body"
+                            style={{ fontWeight: "600" }}
+                            numberOfLines={1}
+                          >
+                            {item.catalogItem.name}
+                          </ThemedText>
+                          <ThemedText
+                            type="small"
+                            style={{ color: theme.textSecondary }}
+                          >
+                            ₹{item.unitPrice}/{item.unit}
+                          </ThemedText>
+                        </View>
+
+                        <View style={styles.quantityControls}>
+                          <Pressable
+                            onPress={() =>
+                              updateCartQuantity(item.id, item.quantity - 1)
+                            }
+                            style={[
+                              styles.quantityBtn,
+                              { borderColor: theme.border },
+                            ]}
+                          >
+                            <Feather
+                              name="minus"
+                              size={14}
+                              color={theme.text}
+                            />
+                          </Pressable>
+                          <ThemedText
+                            type="body"
+                            style={{
+                              fontWeight: "600",
+                              minWidth: 30,
+                              textAlign: "center",
+                            }}
+                          >
+                            {item.quantity}
+                          </ThemedText>
+                          <Pressable
+                            onPress={() =>
+                              updateCartQuantity(item.id, item.quantity + 1)
+                            }
+                            style={[
+                              styles.quantityBtn,
+                              { borderColor: theme.border },
+                            ]}
+                          >
+                            <Feather name="plus" size={14} color={theme.text} />
+                          </Pressable>
+                        </View>
+
+                        <ThemedText
+                          type="body"
+                          style={{
+                            fontWeight: "700",
+                            minWidth: 60,
+                            textAlign: "right",
+                          }}
+                        >
+                          ₹{item.totalCost.toLocaleString()}
+                        </ThemedText>
+
+                        <Pressable
+                          onPress={() => removeFromCart(item.id)}
+                          style={{ marginLeft: Spacing.sm }}
+                        >
+                          <Feather name="trash-2" size={16} color="#DC2626" />
+                        </Pressable>
+                      </View>
+                    ))}
+
+                    <View style={{ marginTop: Spacing.sm }}>
+                      <ThemedText type="small" style={styles.sectionLabel}>
+                        Payment Status
+                      </ThemedText>
+                      <View style={styles.paymentRow}>
+                        <Pressable
+                          onPress={() => setCartPaymentStatus("pending")}
+                          style={[
+                            styles.paymentChoice,
+                            {
+                              borderColor:
+                                cartPaymentStatus === "pending"
+                                  ? Colors.light.warning
+                                  : theme.border,
+                              backgroundColor:
+                                cartPaymentStatus === "pending"
+                                  ? Colors.light.warning + "12"
+                                  : theme.backgroundDefault,
+                            },
+                          ]}
+                        >
+                          <Feather
+                            name="clock"
+                            size={16}
+                            color={
+                              cartPaymentStatus === "pending"
+                                ? Colors.light.warning
+                                : theme.textSecondary
+                            }
+                          />
+                          <ThemedText
+                            type="small"
+                            style={{
+                              marginLeft: 8,
+                              color:
+                                cartPaymentStatus === "pending"
+                                  ? Colors.light.warning
+                                  : theme.text,
+                              fontWeight:
+                                cartPaymentStatus === "pending" ? "700" : "500",
+                            }}
+                          >
+                            Pending
+                          </ThemedText>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => setCartPaymentStatus("paid")}
+                          style={[
+                            styles.paymentChoice,
+                            {
+                              borderColor:
+                                cartPaymentStatus === "paid"
+                                  ? Colors.light.success
+                                  : theme.border,
+                              backgroundColor:
+                                cartPaymentStatus === "paid"
+                                  ? Colors.light.success + "12"
+                                  : theme.backgroundDefault,
+                            },
+                          ]}
+                        >
+                          <Feather
+                            name="check-circle"
+                            size={16}
+                            color={
+                              cartPaymentStatus === "paid"
+                                ? Colors.light.success
+                                : theme.textSecondary
+                            }
+                          />
+                          <ThemedText
+                            type="small"
+                            style={{
+                              marginLeft: 8,
+                              color:
+                                cartPaymentStatus === "paid"
+                                  ? Colors.light.success
+                                  : theme.text,
+                              fontWeight:
+                                cartPaymentStatus === "paid" ? "700" : "500",
+                            }}
+                          >
+                            Paid
+                          </ThemedText>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                   <View style={styles.vendorActions}>
+  <Pressable
+    onPress={() => {
+      console.log("Place Order button pressed");
+      handleVendorPayLater(vendorGroup);
+    }}
+    style={[
+      styles.payLaterBtn,
+      { borderColor: theme.border },
+    ]}
+  >
+    <ThemedText
+      type="small"
+      style={{
+        color: theme.textSecondary,
+        fontWeight: "600",
+      }}
+    >
+      Place Order
+    </ThemedText>
+  </Pressable>
+</View>
+                  </View>
+                ))}
+
+                {/* Cart Total */}
+                <View
+                  style={[
+                    styles.cartTotalCard,
+                    {
+                      backgroundColor: theme.backgroundSecondary,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <ThemedText type="body" style={{ fontWeight: "800" }}>
+                    Total Amount
+                  </ThemedText>
+                  <ThemedText
+                    type="h3"
+                    style={{ fontWeight: "900", color: Colors.light.primary }}
+                  >
+                    ₹{getCartTotal().toLocaleString()}
+                  </ThemedText>
+                </View>
+              </>
+            )}
+          </KeyboardAwareScrollViewCompat>
+        </ThemedView>
+      </Modal>
 
       {!canOrder ? (
         <View
@@ -2042,15 +1940,17 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Spacing.lg,
-    // paddingTop: Spacing.lg,
+    paddingTop: Spacing.lg,
   },
-  productCard: {
-    flex: 1,
-    minHeight: 170,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-  },
+ 
+productCard: {
+  flex: 1,
+  minHeight: 170,
+  borderRadius: BorderRadius.lg,
+  padding: Spacing.md,
+  borderWidth: 1,
+},
+
   productIcon: {
     width: 24,
     height: 24,
@@ -2061,8 +1961,9 @@ const styles = StyleSheet.create({
   },
   productName: {
     fontWeight: "700",
-    fontSize: Platform.OS === "web" ? 14 : 12,
-    lineHeight: 16,
+ fontSize: Platform.OS === "web" ? 14 : 12,
+lineHeight: 16,
+
   },
   categoryBadge: {
     alignSelf: "flex-start",
@@ -2082,16 +1983,15 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   emptyState: {
+    paddingVertical: Spacing["4xl"],
     alignItems: "center",
-    paddingVertical: Spacing.xl * 2,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.backgroundDefault,
-    maxWidth: Platform.OS === "web" ? 720 : "100%",
-    alignSelf: "center",
-    marginTop: 20,
-  },
+ modalContainer: {
+  flex: 1,
+  maxWidth: Platform.OS === "web" ? 720 : "100%",
+  alignSelf: "center",
+},
+
   modalHeader: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
@@ -2102,9 +2002,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing["2xl"],
-    paddingBottom: Spacing.xl,
-    flexGrow: 1,
+    paddingTop: Spacing.lg,
   },
   checkoutCard: {
     borderRadius: BorderRadius.lg,
@@ -2126,7 +2024,6 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: Spacing.lg,
-    marginBottom: Spacing.lg,
   },
   sectionLabel: {
     color: Colors.light.textSecondary,
@@ -2180,7 +2077,6 @@ const styles = StyleSheet.create({
   paymentRow: {
     flexDirection: "row",
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
   },
   paymentChoice: {
     flex: 1,
@@ -2252,9 +2148,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  productCardContainer: {
-    flex: 1,
-  },
+productCardContainer: {
+  flex: 1,
+},
+
   addToCartBtn: {
     marginTop: Spacing.sm,
     height: 36,
@@ -2332,7 +2229,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: Spacing.lg,
-    marginBottom: Spacing.xl,
   },
   // UPI Payment styles
   upiAppsGrid: {
@@ -2398,46 +2294,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-  },
-  // New styles for cart modal
-  iconButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  iconCircleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.light.backgroundSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Enhanced empty state for cart
-  cartEmptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.xl * 2,
-    flex: 1,
-  },
-  // Payment status styles
-  paymentStatusRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  paymentStatusChoice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-  },
-  // ScrollView content styles
-  scrollContent: {
-    flexGrow: 1,
   },
 });
